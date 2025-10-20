@@ -1,28 +1,8 @@
 use reqwest::{Client, header};
-use serde::Deserialize;
-use serde_json::json;
+use serde::{Deserialize, de::DeserializeOwned};
+use serde_json::{Value, json};
 
-use crate::errors::errors::Error;
-
-#[derive(Debug, Deserialize)]
-struct RpcLatestBlockhashResponse {
-    jsonrpc: String,
-    id: String,
-    result: RpcLatestBlockhashResult,
-}
-
-#[derive(Debug, Deserialize)]
-struct RpcLatestBlockhashResult {
-    context: RpcContext,
-    value: RpcLatestBlockhash,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct RpcLatestBlockhash {
-    pub blockhash: String,
-    #[serde(rename = "lastValidBlockHeight")]
-    pub last_valid_block_height: u32,
-}
+use crate::{errors::errors::Error, rpc::core::make_rpc_request};
 
 #[derive(Debug, Deserialize)]
 struct RpcBalanceResponse {
@@ -49,76 +29,66 @@ pub async fn get_balance(
     request_id: &str,
     account_pubkey: &str,
 ) -> Result<u64, Error> {
-    let mut headers = header::HeaderMap::new();
-    headers.insert("Content-Type", "application/json".parse().unwrap());
+    let rpc_result: RpcBalanceResponse =
+        make_rpc_request(rpc_url, request_id, "getBalance", json!([account_pubkey])).await?;
 
-    let body = json!({
-        "jsonrpc": "2.0",
-        "id": request_id,
-        "method": "getBalance",
-        "params": [account_pubkey]
-    });
+    Ok(rpc_result.result.value)
+}
 
-    let client = Client::builder()
-        .redirect(reqwest::redirect::Policy::none())
-        .build()?;
+#[derive(Debug, Deserialize)]
+struct RpcLatestBlockhashResponse {
+    jsonrpc: String,
+    id: String,
+    result: RpcLatestBlockhashResult,
+}
 
-    let resp = client
-        .post(rpc_url)
-        .headers(headers)
-        .body(body.to_string())
-        .send()
-        .await?;
+#[derive(Debug, Deserialize)]
+struct RpcLatestBlockhashResult {
+    context: RpcContext,
+    value: RpcLatestBlockhash,
+}
 
-    let status = resp.status();
-    let text = resp.text().await?;
-    if !status.is_success() {
-        return Err(Error::RpcError(format!("http {}: {}", status, text)));
-    }
-
-    let parsed: RpcBalanceResponse = serde_json::from_str(&text)?;
-    let balance = parsed.result.value;
-
-    println!("Balance: {}", balance);
-    Ok(balance)
+#[derive(Debug, Deserialize)]
+pub struct RpcLatestBlockhash {
+    pub blockhash: String,
+    #[serde(rename = "lastValidBlockHeight")]
+    pub last_valid_block_height: u32,
 }
 
 pub async fn get_latest_blockhash(
     rpc_url: &str,
     request_id: &str,
 ) -> Result<RpcLatestBlockhash, Error> {
-    let mut headers = header::HeaderMap::new();
-    headers.insert("Content-Type", "application/json".parse().unwrap());
+    let rpc_result: RpcLatestBlockhashResponse = make_rpc_request(
+        rpc_url,
+        request_id,
+        "getLatestBlockhash",
+        json!([{"commitment": "processed", "minContextSlot": 1000}]),
+    )
+    .await?;
 
-    let body = json!({
-        "jsonrpc": "2.0",
-        "id": request_id,
-        "method": "getLatestBlockhash",
-        "params": [{"commitment": "processed", "minContextSlot": 1000}]
-    });
-
-    let client = Client::builder()
-        .redirect(reqwest::redirect::Policy::none())
-        .build()?;
-
-    let resp = client
-        .post(rpc_url)
-        .headers(headers)
-        .body(body.to_string())
-        .send()
-        .await?;
-
-    let status = resp.status();
-    let text = resp.text().await?;
-    if !status.is_success() {
-        return Err(Error::RpcError(format!("http {}: {}", status, text)));
-    }
-
-    println!("{}", text);
-
-    let parsed: RpcLatestBlockhashResponse = serde_json::from_str(&text)?;
-
-    Ok(parsed.result.value)
+    Ok(rpc_result.result.value)
 }
 
-pub fn get_minimum_balance_for_rent_exemption() {}
+#[derive(Debug, Deserialize)]
+pub struct RpcMinimumBalanceForRentExemptionResponse {
+    jsonrpc: String,
+    id: String,
+    result: u128,
+}
+
+pub async fn get_minimum_balance_for_rent_exemption(
+    rpc_url: &str,
+    request_id: &str,
+    bytes: u128,
+) -> Result<u128, Error> {
+    let rpc_result: RpcMinimumBalanceForRentExemptionResponse = make_rpc_request(
+        rpc_url,
+        request_id,
+        "getMinimumBalanceForRentExemption",
+        json!([bytes]),
+    )
+    .await?;
+
+    Ok(rpc_result.result)
+}

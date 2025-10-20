@@ -45,13 +45,29 @@ pub async fn initiate_job(
 
     let funding_arc = Arc::clone(&state.services.funding);
     let mut funding = funding_arc.write().await;
-    let job = funding.initiate_funding_job(pubkeys, payload.lamports_per_wallet);
+    let job_result = funding
+        .initiate_funding_job(state.rpc_url, pubkeys, payload.lamports_per_wallet)
+        .await;
+
+    let job = match job_result {
+        Err(err) => {
+            eprintln!("Error initiating funding job {}", err);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    message: String::from("There was an internal error starting the fundin job."),
+                }),
+            )
+                .into_response();
+        }
+        Ok(j) => j,
+    };
 
     let res = InitiateFundingResponse {
         message: format!("Initiated."),
         job: JobProperty {
             funding_wallet_pubkey: job.distro_wallet.pubkey().to_string(),
-            total_fundig_lamports: wallet_count * (payload.lamports_per_wallet as u128),
+            total_fundig_lamports: job.total_funding_lamports,
         },
     };
 

@@ -8,9 +8,8 @@ use tokio::task::JoinSet;
 
 use crate::errors::errors::Error;
 use crate::funding::funding::{Funding, FundingJob};
-use crate::rpc;
-use crate::rpc::read::get_balance;
-use crate::rpc::send::sendTransaction;
+use crate::rpc::read::{get_balance, get_minimum_balance_for_rent_exemption};
+use crate::rpc::send::send_transaction;
 use crate::txn_factory::blockhash::get_blockhash;
 use crate::txn_factory::transfer::build_sol_transfer;
 
@@ -26,18 +25,30 @@ impl LocalFunding {
 
 #[async_trait]
 impl Funding for LocalFunding {
-    fn initiate_funding_job(
+    async fn initiate_funding_job(
         &mut self,
+        rpc_url: String,
         target_pubkeys: Vec<Pubkey>,
         lamports_per_wallet: u64,
-    ) -> &FundingJob {
+    ) -> Result<&FundingJob, Error> {
+        //TODO check that lamports per wallet is at least 0.001 or smth
+
+        let total_funding_lamports =
+            ((lamports_per_wallet + 5000u64) as u128) * target_pubkeys.len() as u128;
+
+        let min_rent_result =
+            get_minimum_balance_for_rent_exemption(&rpc_url, "initiate_funding", 0).await?;
+
+        let total_lamports_to_provide = total_funding_lamports + min_rent_result;
+
         self.active_job = Some(FundingJob {
             distro_wallet: Keypair::new(),
             target_pubkeys: target_pubkeys,
             lamports_per_wallet: lamports_per_wallet,
+            total_funding_lamports: total_lamports_to_provide,
         });
 
-        return self.active_job.as_ref().unwrap();
+        return Ok(self.active_job.as_ref().unwrap());
     }
 
     async fn complete_funding_job(&self, rpc_url: String) -> Result<(), Error> {
@@ -62,12 +73,11 @@ impl Funding for LocalFunding {
             return Err(Error::RpcError(String::from("Failed to get balance")));
         }
 
-        let total_lamports_required =
-            job.lamports_per_wallet as u64 * job.target_pubkeys.len() as u64;
+        let total_lamports_required = job.total_funding_lamports;
 
         let provided_funding = balance_result.unwrap();
 
-        if provided_funding < total_lamports_required {
+        if (provided_funding as u128) < total_lamports_required {
             eprintln!("We dont have enough funding {}", provided_funding);
             return Err(Error::InsufficientFunding(String::from(
                 "Insufficient funding to execute funding job",
@@ -99,7 +109,7 @@ impl Funding for LocalFunding {
                     build_sol_transfer(&distro_wallet, lamports_per_wallet, &pubkey, latest_hash)
                         .await?;
 
-                let txn_hash = sendTransaction(&rpc_url, "funding", &txn).await?;
+                let txn_hash = send_transaction(&rpc_url, "funding", &txn).await?;
 
                 Ok(txn_hash)
             });
