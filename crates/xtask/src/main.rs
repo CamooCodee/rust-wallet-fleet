@@ -33,7 +33,11 @@ fn main() {
         spawn("cargo", &["run", "-p", "backend"], "backend")
     };
     thread::sleep(Duration::from_millis(500));
-    let mut fe = spawn("npm", &["run", "dev", "--prefix", "frontend"], "frontend");
+    let mut fe = spawn(
+        "npm",
+        &["run", "dev", "--prefix", "frontend/wallet-fleet"],
+        "wallet-fleet",
+    );
     let _ = be.wait();
     let _ = fe.wait();
 }
