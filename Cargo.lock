@@ -120,6 +120,7 @@ dependencies = [
  "solana-system-interface",
  "thiserror",
  "tokio",
+ "tower-http",
 ]
 
 [[package]]

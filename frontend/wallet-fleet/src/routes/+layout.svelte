@@ -23,12 +23,12 @@
 <style>
   .app {
     display: flex;
-    gap: 15px;
     width: 100%;
     height: 100%;
   }
   .content {
     flex: 1;
     min-width: 0;
+    padding-inline: 15px;
   }
 </style>

@@ -5,6 +5,7 @@ use axum::{
 use dotenvy::dotenv;
 use serde_json::json;
 use std::{env, net::SocketAddr, sync::Arc};
+use tower_http::cors::{Any, CorsLayer};
 
 mod endpoints;
 mod errors;
@@ -55,13 +56,19 @@ async fn main() {
         rpc_url: rpc_url,
     };
 
+    let cors = CorsLayer::new()
+        .allow_origin(Any)
+        .allow_methods(Any)
+        .allow_headers(Any);
+
     let app = Router::new()
         .route("/health", get(health))
         .route("/wallets/create", post(endpoints::wallet::create_wallets))
         .route("/wallets/list", get(endpoints::wallet::list_wallets))
         .route("/funding/initiate", post(endpoints::funding::initiate_job))
         .route("/funding/complete", post(endpoints::funding::complete_job))
-        .with_state(state);
+        .with_state(state)
+        .layer(cors);
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 8764));
     println!("listening on {}", addr);
