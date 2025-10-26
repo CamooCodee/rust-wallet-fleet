@@ -92,3 +92,32 @@ pub async fn get_minimum_balance_for_rent_exemption(
 
     Ok(rpc_result.result)
 }
+
+#[derive(Debug, Deserialize)]
+pub struct RpcMultipleAccountsResponse {
+    jsonrpc: String,
+    id: String,
+    result: RpcMultipleAccountsResult,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct RpcMultipleAccountsResult {
+    context: RpcContext,
+    value: Vec<Option<RpcAccount>>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct RpcAccount {
+    pub lamports: u64,
+}
+
+pub async fn get_multiple_accounts(
+    rpc_url: &str,
+    request_id: &str,
+    pubkeys: &Vec<String>,
+) -> Result<Vec<Option<RpcAccount>>, Error> {
+    let rpc_result: RpcMultipleAccountsResponse =
+        make_rpc_request(rpc_url, request_id, "getMultipleAccounts", json!([pubkeys])).await?;
+
+    Ok(rpc_result.result.value)
+}

@@ -4,7 +4,10 @@ import type { ApiResponse } from "../../util/api";
 import { apiUrl } from "../../util/util";
 
 interface WalletListResponse extends ApiResponse {
-    pubkeys: string[]
+    wallets: {
+        pubkey: string,
+        sol_lamports: string
+    }[]
 }
 
 export const load: Load = async ({ fetch }) => {

@@ -18,3 +18,7 @@ export function postApi(endpoint: string, data: any) {
         body: JSON.stringify(data)
     })
 }
+
+export function lamportsToSol(lamports: string): number {
+    return Number(BigInt(lamports) * 1000n / 1_000_000_000n) / 1000;
+}

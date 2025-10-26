@@ -3,11 +3,13 @@ use std::sync::Arc;
 use axum::{
     Json,
     extract::{Query, State},
+    response::IntoResponse,
 };
+use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use solana_sdk::{signature::Keypair, signer::Signer};
 
-use crate::AppState;
+use crate::{AppState, endpoints::misc::ErrorResponse, rpc::read::get_multiple_accounts};
 
 #[derive(Deserialize)]
 pub struct CreateWalletRequest {
@@ -60,21 +62,57 @@ impl Default for ListWalletsRequest {
 #[derive(Serialize)]
 pub struct ListWalletsResponse {
     message: String,
-    pubkeys: Vec<String>,
+    wallets: Vec<ListWalletResponseWallet>,
+}
+
+#[derive(Serialize)]
+pub struct ListWalletResponseWallet {
+    pubkey: String,
+    sol_lamports: String,
 }
 
 pub async fn list_wallets(
     State(state): State<AppState>,
     Query(params): Query<ListWalletsRequest>,
-) -> Json<ListWalletsResponse> {
+) -> impl IntoResponse {
     let wallet_store_arc = Arc::clone(&state.services.wallet_store);
     let wallet_store = wallet_store_arc.read().await;
     let wallets = wallet_store.get_all_wallets(params.page, params.page_size);
     let pubkeys = wallets.iter().map(|w| w.pubkey().to_string()).collect();
 
+    let accounts_result = get_multiple_accounts(&state.rpc_url, "list_wallets", &pubkeys).await;
+
+    let accounts = match accounts_result {
+        Ok(acc) => acc,
+        Err(err) => {
+            eprintln!("Error fetching multiple accounts {}", err);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    message: String::from("Interal error while feching wallet balances."),
+                }),
+            )
+                .into_response();
+        }
+    };
+
+    let mut wallets: Vec<ListWalletResponseWallet> = Vec::new();
+
+    for (i, acc) in accounts.iter().enumerate() {
+        if let Some(pk) = pubkeys.get(i) {
+            let lamports = acc.as_ref().map(|a| a.lamports).unwrap_or(0u64);
+
+            wallets.push(ListWalletResponseWallet {
+                pubkey: pk.to_owned(),
+                sol_lamports: lamports.to_string(),
+            });
+        }
+    }
+
     let res = ListWalletsResponse {
         message: String::from("Retrieved wallets."),
-        pubkeys: pubkeys,
+        wallets: wallets,
     };
-    return Json(res);
+
+    return (StatusCode::OK, Json(res)).into_response();
 }
