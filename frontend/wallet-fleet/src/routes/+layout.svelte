@@ -3,6 +3,7 @@
   import "../app.css";
   import Sidebar from "../components/sidebar/sidebar.svelte";
   import { page } from "$app/state";
+  import Toast from "../components/toast.svelte";
 
   let { children } = $props();
 
@@ -18,6 +19,7 @@
   <main class="content">
     {@render children?.()}
   </main>
+  <Toast />
 </div>
 
 <style>

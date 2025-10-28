@@ -1,3 +1,3 @@
 export interface ApiResponse {
-    message: String
+    message: string
 }

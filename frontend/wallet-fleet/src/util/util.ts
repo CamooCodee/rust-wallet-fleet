@@ -20,5 +20,9 @@ export function postApi(endpoint: string, data: any) {
 }
 
 export function lamportsToSol(lamports: string): number {
-    return Number(BigInt(lamports) * 1000n / 1_000_000_000n) / 1000;
+    return Number(BigInt(lamports) * 100000n / 1_000_000_000n) / 100000;
+}
+
+export async function copyWallet(pubkey: string) {
+    await navigator.clipboard.writeText(pubkey);
 }

@@ -16,7 +16,15 @@ const config = {
 
 	defaults: {
 		script: 'ts',
-	}
+	},
+
+	onwarn: (warning, handler) => {
+		if (warning.code.startsWith('a11y')) {
+			console.log("ignoring warning: " + warning.code);
+			return
+		}
+    	handler(warning)
+	},
 };
 
 export default config;

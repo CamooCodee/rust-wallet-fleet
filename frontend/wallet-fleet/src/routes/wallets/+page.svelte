@@ -1,22 +1,77 @@
 <script lang="ts">
-  import { lamportsToSol, postApi, shortenPubkey } from "../../util/util";
+  import {
+    copyWallet,
+    lamportsToSol,
+    postApi,
+    shortenPubkey,
+  } from "../../util/util";
   import { invalidate } from "$app/navigation";
+  import FundingModal from "../../components/funding-modal.svelte";
+  import type { ApiResponse } from "../../util/api";
+  import { toastRes } from "../../util/toast";
 
   let { data } = $props();
-  console.log(data);
+  let loadingWallets: boolean = $state(false);
+  let fundingModalOpen: boolean = $state(false);
+  let loadingFunding: boolean = $state(false);
+  let solToFund: number | null = $state(null);
+  let fundingWallet: string | null = $state(null);
 
-  // TODO: Add loading state that disables the button
   async function createWallets() {
+    loadingWallets = true;
     const response = await postApi("/wallets/create", { count: 1 });
-    console.log(response.status);
+    const data = (await response.json()) as ApiResponse;
+    toastRes(response, data);
+
     await invalidate((url) => {
-      console.log(url);
       return url.pathname == "/wallets/list";
     });
+    loadingWallets = false;
   }
 
-  async function copyWallet(pubkey: string) {
-    await navigator.clipboard.writeText(pubkey);
+  interface InitiateFundingResponse extends ApiResponse {
+    job: {
+      funding_wallet_pubkey: string;
+      total_funding_lamports: string;
+    };
+  }
+
+  async function initiateFunding(solPerWallet: number) {
+    loadingFunding = true;
+    const lamportsPerWallet =
+      (BigInt(solPerWallet * 1000) * 1_000_000_000n) / 1000n;
+    const response = await postApi("/funding/initiate", {
+      lamports_per_wallet: lamportsPerWallet.toString(),
+    });
+    const data = (await response.json()) as InitiateFundingResponse;
+    toastRes(response, data);
+    loadingFunding = false;
+
+    if (response.status > 300) {
+      return;
+    }
+
+    solToFund = lamportsToSol(data.job.total_funding_lamports);
+    fundingWallet = data.job.funding_wallet_pubkey;
+  }
+  async function completeFunding() {
+    loadingFunding = true;
+    const response = await postApi("/funding/complete", null);
+    const data = await response.json();
+    toastRes(response, data);
+
+    loadingFunding = false;
+
+    if (response.status > 300) {
+      return;
+    }
+
+    fundingModalOpen = false;
+    loadingWallets = true;
+    await invalidate((url) => {
+      return url.pathname == "/wallets/list";
+    });
+    loadingWallets = false;
   }
 </script>
 
@@ -26,7 +81,14 @@
     class="action-button"
     onclick={() => {
       createWallets();
-    }}>Create</button
+    }}
+    disabled={loadingWallets}>Create</button
+  >
+  <button
+    class="secondary-button"
+    onclick={() => {
+      fundingModalOpen = true;
+    }}>Fund</button
   >
 </div>
 
@@ -44,6 +106,29 @@
     </li>
   {/each}
 </ul>
+
+<svelte:window
+  onkeydown={(e) => {
+    if (e.key === "Escape") {
+      fundingModalOpen = false;
+    }
+  }}
+/>
+
+{#if fundingModalOpen}
+  <div class="modal-container">
+    <FundingModal
+      onStartFunding={initiateFunding}
+      onCompleteFunding={completeFunding}
+      onClose={() => {
+        fundingModalOpen = false;
+      }}
+      loading={loadingFunding}
+      sol={solToFund}
+      {fundingWallet}
+    />
+  </div>
+{/if}
 
 <style>
   .header-layout {
@@ -72,10 +157,5 @@
     left: 0;
 
     background-color: gray;
-  }
-  .copy.secondary-button {
-    padding-inline: 10px;
-    padding-block: 5px;
-    font-size: x-small;
   }
 </style>

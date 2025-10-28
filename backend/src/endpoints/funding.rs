@@ -8,13 +8,13 @@ use crate::{AppState, endpoints::misc::ErrorResponse, errors::errors::Error};
 
 #[derive(Deserialize)]
 pub struct InitiateFundingRequest {
-    lamports_per_wallet: u64,
+    lamports_per_wallet: String,
 }
 
 #[derive(Serialize)]
 struct JobProperty {
     funding_wallet_pubkey: String,
-    total_fundig_lamports: u128,
+    total_funding_lamports: String,
 }
 
 #[derive(Serialize)]
@@ -42,11 +42,24 @@ pub async fn initiate_job(
         )
             .into_response();
     }
+    let lamports = payload.lamports_per_wallet.parse::<u64>();
+    let lamports_per_wallet = match lamports {
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse {
+                    message: String::from("Invalid lamports string format"),
+                }),
+            )
+                .into_response();
+        }
+        Ok(v) => v,
+    };
 
     let funding_arc = Arc::clone(&state.services.funding);
     let mut funding = funding_arc.write().await;
     let job_result = funding
-        .initiate_funding_job(state.rpc_url, pubkeys, payload.lamports_per_wallet)
+        .initiate_funding_job(state.rpc_url, pubkeys, lamports_per_wallet)
         .await;
 
     let job = match job_result {
@@ -64,10 +77,10 @@ pub async fn initiate_job(
     };
 
     let res = InitiateFundingResponse {
-        message: format!("Initiated."),
+        message: format!("Initiated funding."),
         job: JobProperty {
             funding_wallet_pubkey: job.distro_wallet.pubkey().to_string(),
-            total_fundig_lamports: job.total_funding_lamports,
+            total_funding_lamports: job.total_funding_lamports.to_string(),
         },
     };
 
@@ -120,7 +133,7 @@ pub async fn complete_job(State(state): State<AppState>) -> impl IntoResponse {
     }
 
     let res = CompleteFundingResponse {
-        message: format!("Completed."),
+        message: format!("Completed funding."),
     };
 
     return (StatusCode::OK, Json(res)).into_response();
