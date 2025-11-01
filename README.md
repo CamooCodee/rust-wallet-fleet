@@ -2,7 +2,8 @@
 
 ## TODO
 
-- Toast that always shows the api request success message on actions and all error messages
-- Loading state when creating wallets
+- Confirm transactions
+- Collect endpoint FE
+- Hosted backend
 
 ![alt text](image.png)

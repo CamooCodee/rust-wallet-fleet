@@ -70,7 +70,7 @@
   }
   .toast-layout {
     position: fixed;
-    bottom: 0px;
+    bottom: 10px;
     left: 50%;
     transform: translateX(-50%);
 

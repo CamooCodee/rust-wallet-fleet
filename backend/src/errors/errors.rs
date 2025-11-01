@@ -10,6 +10,9 @@ pub enum Error {
     InsufficientFunding(String),
 
     #[error("{0}")]
+    InsufficientSol(String),
+
+    #[error("{0}")]
     RpcError(String),
 
     #[error("{0}")]

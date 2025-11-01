@@ -7,6 +7,7 @@ use serde_json::json;
 use std::{env, net::SocketAddr, sync::Arc};
 use tower_http::cors::{Any, CorsLayer};
 
+mod collecting;
 mod endpoints;
 mod errors;
 mod funding;
@@ -25,6 +26,7 @@ pub struct AppServices {
     pub wallet_store:
         Arc<tokio::sync::RwLock<Box<dyn storage::wallet::WalletStorage + Send + Sync>>>,
     pub funding: Arc<tokio::sync::RwLock<Box<dyn funding::funding::Funding>>>,
+    pub collecting: Arc<tokio::sync::RwLock<Box<dyn collecting::collecting::Collecting>>>,
 }
 
 async fn health() -> Json<serde_json::Value> {
@@ -41,6 +43,9 @@ async fn main() {
         ))),
         funding: Arc::new(tokio::sync::RwLock::new(Box::new(
             funding::local_funding::LocalFunding::new(),
+        ))),
+        collecting: Arc::new(tokio::sync::RwLock::new(Box::new(
+            collecting::default_collecting::DefaultCollecting {},
         ))),
     };
 
@@ -67,6 +72,7 @@ async fn main() {
         .route("/wallets/list", get(endpoints::wallet::list_wallets))
         .route("/funding/initiate", post(endpoints::funding::initiate_job))
         .route("/funding/complete", post(endpoints::funding::complete_job))
+        .route("/collect", post(endpoints::collecting::collect_sol))
         .with_state(state)
         .layer(cors);
 

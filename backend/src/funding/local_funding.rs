@@ -92,7 +92,6 @@ impl Funding for LocalFunding {
             }
         };
 
-        // TODO run all of these in parallel
         let mut send_set: JoinSet<Result<String, Error>> = JoinSet::new();
 
         let distro_wallet = Arc::new(job.distro_wallet.insecure_clone());
@@ -106,7 +105,7 @@ impl Funding for LocalFunding {
 
             send_set.spawn(async move {
                 let txn =
-                    build_sol_transfer(&distro_wallet, lamports_per_wallet, &pubkey, latest_hash)
+                    build_sol_transfer(&distro_wallet, lamports_per_wallet, &pubkey, &latest_hash)
                         .await?;
 
                 let txn_hash = send_transaction(&rpc_url, "funding", &txn).await?;
