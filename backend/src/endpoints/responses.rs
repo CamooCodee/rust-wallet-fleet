@@ -16,3 +16,23 @@ pub fn bad_request(message: &str) -> Response {
     )
         .into_response();
 }
+
+pub fn server_error(message: &str) -> Response {
+    return (
+        StatusCode::INTERNAL_SERVER_ERROR,
+        Json(ErrorResponse {
+            message: message.to_owned(),
+        }),
+    )
+        .into_response();
+}
+
+pub fn confilict(message: &str) -> Response {
+    return (
+        StatusCode::CONFLICT,
+        Json(ErrorResponse {
+            message: message.to_owned(),
+        }),
+    )
+        .into_response();
+}

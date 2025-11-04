@@ -5,7 +5,11 @@ use axum::{
 use dotenvy::dotenv;
 use serde_json::json;
 use std::{env, net::SocketAddr, sync::Arc};
+use tokio::sync::{Mutex, RwLock};
 use tower_http::cors::{Any, CorsLayer};
+use tungstenite::Message;
+
+use crate::websocket::solana_websocket::SolanaWebsocket;
 
 mod collecting;
 mod endpoints;
@@ -14,6 +18,7 @@ mod funding;
 mod rpc;
 mod storage;
 mod txn_factory;
+mod websocket;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -21,12 +26,14 @@ pub struct AppState {
     pub rpc_url: String,
 }
 
+pub type Websocket = Arc<RwLock<Box<SolanaWebsocket>>>;
+
 #[derive(Clone)]
 pub struct AppServices {
-    pub wallet_store:
-        Arc<tokio::sync::RwLock<Box<dyn storage::wallet::WalletStorage + Send + Sync>>>,
-    pub funding: Arc<tokio::sync::RwLock<Box<dyn funding::funding::Funding>>>,
-    pub collecting: Arc<tokio::sync::RwLock<Box<dyn collecting::collecting::Collecting>>>,
+    pub wallet_store: Arc<RwLock<Box<dyn storage::wallet::WalletStorage + Send + Sync>>>,
+    pub funding: Arc<RwLock<Box<dyn funding::funding::Funding>>>,
+    pub collecting: Arc<RwLock<Box<dyn collecting::collecting::Collecting>>>,
+    pub websocket: Websocket,
 }
 
 async fn health() -> Json<serde_json::Value> {
@@ -37,6 +44,16 @@ async fn health() -> Json<serde_json::Value> {
 
 #[tokio::main]
 async fn main() {
+    dotenv().ok();
+
+    let helius_api_key =
+        env::var("HELIUS_API_KEY").expect("Missing HELIUS_API_KEY in environment or .env file");
+
+    let rpc_url = format!("https://devnet.helius-rpc.com/?api-key={}", helius_api_key);
+    let websocket_url = format!("wss://devnet.helius-rpc.com/?api-key={}", helius_api_key);
+
+    let ws = SolanaWebsocket::new(&websocket_url).await;
+
     let services = AppServices {
         wallet_store: Arc::new(tokio::sync::RwLock::new(Box::new(
             storage::local_wallet_storage::LocalWalletStorage::new(),
@@ -47,14 +64,8 @@ async fn main() {
         collecting: Arc::new(tokio::sync::RwLock::new(Box::new(
             collecting::default_collecting::DefaultCollecting {},
         ))),
+        websocket: Arc::new(RwLock::new(Box::new(ws))),
     };
-
-    dotenv().ok();
-
-    let helius_api_key =
-        env::var("HELIUS_API_KEY").expect("Missing HELIUS_API_KEY in environment or .env file");
-
-    let rpc_url = format!("https://devnet.helius-rpc.com/?api-key={}", helius_api_key);
 
     let state = AppState {
         services,

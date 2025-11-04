@@ -1,6 +1,5 @@
-use reqwest::{Client, header};
-use serde::{Deserialize, de::DeserializeOwned};
-use serde_json::{Value, json};
+use serde::Deserialize;
+use serde_json::json;
 
 use crate::{errors::errors::Error, rpc::core::make_rpc_request};
 

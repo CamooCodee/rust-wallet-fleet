@@ -87,9 +87,6 @@ pub async fn initiate_job(
     return (StatusCode::OK, Json(res)).into_response();
 }
 
-#[derive(Deserialize)]
-pub struct CompleteFundingRequest {}
-
 #[derive(Serialize)]
 pub struct CompleteFundingResponse {
     message: String,
@@ -97,8 +94,10 @@ pub struct CompleteFundingResponse {
 
 pub async fn complete_job(State(state): State<AppState>) -> impl IntoResponse {
     let funding_arc = Arc::clone(&state.services.funding);
-    let mut funding = funding_arc.write().await;
-    let completion_result = funding.complete_funding_job(state.rpc_url).await;
+    let funding = funding_arc.write().await;
+    let completion_result = funding
+        .complete_funding_job(state.rpc_url, state.services.websocket)
+        .await;
 
     if completion_result.is_err() {
         if let Err(Error::FundingJobNotStarted(_)) = completion_result {

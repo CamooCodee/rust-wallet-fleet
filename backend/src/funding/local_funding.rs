@@ -6,6 +6,7 @@ use solana_sdk::signature::Keypair;
 use solana_sdk::signer::Signer;
 use tokio::task::JoinSet;
 
+use crate::Websocket;
 use crate::errors::errors::Error;
 use crate::funding::funding::{Funding, FundingJob};
 use crate::rpc::read::{get_balance, get_minimum_balance_for_rent_exemption};
@@ -51,7 +52,11 @@ impl Funding for LocalFunding {
         return Ok(self.active_job.as_ref().unwrap());
     }
 
-    async fn complete_funding_job(&self, rpc_url: String) -> Result<(), Error> {
+    async fn complete_funding_job(
+        &self,
+        rpc_url: String,
+        websocket_service: Websocket,
+    ) -> Result<(), Error> {
         let job = match &self.active_job {
             Some(j) => j,
             None => {
@@ -102,13 +107,30 @@ impl Funding for LocalFunding {
             let distro_wallet = Arc::clone(&distro_wallet);
             let latest_hash = latest_hash.clone();
             let rpc_url = Arc::clone(&rpc_url);
+            let websocket_service_arc = websocket_service.clone();
 
             send_set.spawn(async move {
                 let txn =
                     build_sol_transfer(&distro_wallet, lamports_per_wallet, &pubkey, &latest_hash)
                         .await?;
+                let sig = txn.signature[..6].to_string();
 
-                let txn_hash = send_transaction(&rpc_url, "funding", &txn).await?;
+                println!("Built txn {}", sig);
+
+                let confirmation_handle = tokio::spawn(async move {
+                    let websocket = websocket_service_arc.read().await;
+                    websocket.confirm_transaction(&txn.signature).await;
+                });
+
+                println!("Started confirmation {}", sig);
+
+                let txn_hash = send_transaction(&rpc_url, "funding", &txn.transaction).await?;
+
+                println!("Sent {}", sig);
+
+                confirmation_handle.await;
+
+                println!("Confirmed {}", sig);
 
                 Ok(txn_hash)
             });

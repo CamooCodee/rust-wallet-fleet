@@ -1,8 +1,5 @@
-use std::sync::Arc;
-
 use async_trait::async_trait;
 use solana_sdk::{pubkey::Pubkey, signature::Keypair, signer::Signer};
-use tokio::task::JoinSet;
 
 use crate::{
     collecting::collecting::Collecting,
@@ -63,7 +60,7 @@ impl Collecting for DefaultCollecting {
             )
             .await?;
 
-            txns.push(txn);
+            txns.push(txn.transaction);
         }
 
         for txn in txns {

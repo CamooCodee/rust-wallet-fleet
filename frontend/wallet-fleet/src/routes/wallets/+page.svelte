@@ -66,6 +66,8 @@
       return;
     }
 
+    fundingWallet = null;
+    solToFund = null;
     fundingModalOpen = false;
     loadingWallets = true;
     await invalidate((url) => {

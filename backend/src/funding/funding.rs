@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use solana_sdk::{pubkey::Pubkey, signature::Keypair};
 
-use crate::errors::errors::Error;
+use crate::{Websocket, errors::errors::Error};
 
 #[derive(Debug)]
 pub struct FundingJob {
@@ -19,5 +19,9 @@ pub trait Funding: Send + Sync {
         target_pubkeys: Vec<Pubkey>,
         lamports_per_wallet: u64,
     ) -> Result<&FundingJob, Error>;
-    async fn complete_funding_job(&self, rpc_url: String) -> Result<(), Error>;
+    async fn complete_funding_job(
+        &self,
+        rpc_url: String,
+        websocket: Websocket,
+    ) -> Result<(), Error>;
 }
