@@ -9,13 +9,11 @@
   import FundingModal from "../../components/funding-modal.svelte";
   import type { ApiResponse } from "../../util/api";
   import { toastRes } from "../../util/toast";
+  import CollectingModal from "../../components/collecting-modal.svelte";
 
   let { data } = $props();
+
   let loadingWallets: boolean = $state(false);
-  let fundingModalOpen: boolean = $state(false);
-  let loadingFunding: boolean = $state(false);
-  let solToFund: number | null = $state(null);
-  let fundingWallet: string | null = $state(null);
 
   async function createWallets() {
     loadingWallets = true;
@@ -28,6 +26,11 @@
     });
     loadingWallets = false;
   }
+
+  let fundingModalOpen: boolean = $state(false);
+  let loadingFunding: boolean = $state(false);
+  let solToFund: number | null = $state(null);
+  let fundingWallet: string | null = $state(null);
 
   interface InitiateFundingResponse extends ApiResponse {
     job: {
@@ -75,6 +78,30 @@
     });
     loadingWallets = false;
   }
+
+  let collectModalOpen = $state(false);
+
+  async function collectSol(
+    solToCollect: number,
+    pubkeys: string[],
+    destination: string
+  ) {
+    const lamports = (solToCollect * 1_000_000_000).toString();
+    const body = {
+      lamports: lamports,
+      source_pubkeys: pubkeys,
+      destination: destination,
+    };
+    const response = await postApi("/collect", body);
+    const data = await response.json();
+    toastRes(response, data);
+
+    if (response.status > 300) {
+      return;
+    }
+
+    collectModalOpen = false;
+  }
 </script>
 
 <div class="header-layout">
@@ -91,6 +118,12 @@
     onclick={() => {
       fundingModalOpen = true;
     }}>Fund</button
+  >
+  <button
+    class="secondary-button"
+    onclick={() => {
+      collectModalOpen = true;
+    }}>Collect</button
   >
 </div>
 
@@ -128,6 +161,20 @@
       loading={loadingFunding}
       sol={solToFund}
       {fundingWallet}
+    />
+  </div>
+{/if}
+
+{#if collectModalOpen}
+  <div class="modal-container">
+    <CollectingModal
+      wallets={data.wallets}
+      onClose={() => {
+        collectModalOpen = false;
+      }}
+      onCollect={(solToCollect, pubkeys, destination) => {
+        collectSol(solToCollect, pubkeys, destination);
+      }}
     />
   </div>
 {/if}

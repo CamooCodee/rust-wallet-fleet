@@ -24,7 +24,7 @@
 
 <div class="modal">
   <div class="funding-modal-header">
-    <h1 class="modal-title">Funding...</h1>
+    <h1 class="modal-title">Fund</h1>
     <button
       onclick={() => {
         onClose?.();

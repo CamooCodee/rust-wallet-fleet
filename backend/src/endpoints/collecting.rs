@@ -69,7 +69,7 @@ pub async fn collect_sol(
     }
 
     let res = CollectSolResponse {
-        message: String::from("Collected successfully"),
+        message: String::from("Collected successfully."),
     };
 
     return (StatusCode::OK, Json(res)).into_response();

@@ -1,3 +1,9 @@
+:root {
+    --gray-accent: #171717;
+    --gray-light: #c9c9c9;
+    --accent: #cc642f;
+    --accent-rgb: 204, 100, 47;
+}
 body {
     margin: 0; padding: 0;
 
@@ -15,7 +21,7 @@ body {
     color: white;
 
     border: 2px solid;
-    border-color: orangered;
+    border-color: var(--accent);
     border-radius: 10px;
 
     font-size: medium;
@@ -23,13 +29,13 @@ body {
     line-height: 1;
 }
 .action-button:hover {
-    background-color: rgba(255, 69, 0, 0.2);
+    background-color: rgba(var(--accent-rgb), 0.2);
 }
 .action-button:active {
-    background-color: rgba(255, 69, 0, 0.25);
+    background-color: rgba(var(--accent-rgb), 0.25);
 }
 .action-button:disabled {
-    border-color: rgba(255, 69, 0, 0.5);
+    border-color: rgba(var(--accent-rgb), 0.5);
     color: rgba(255, 255, 255, 0.5);
 }
 .action-button:disabled:hover {
@@ -93,7 +99,7 @@ body {
     height: 400px;
 
     border: 1px solid;
-    border-color: orangered;
+    border-color: gray;
     border-radius: 10px;
 
     padding: 35px;
@@ -106,4 +112,14 @@ body {
     padding-inline: 10px;
     padding-block: 5px;
     font-size: x-small;
+}
+
+input {
+    background-color: var(--gray-accent);
+    border: solid 1px;
+    border-color: gray;
+    border-radius: 10px;
+    color: white;
+    padding: 5px;
+    padding-inline: 10px;
 }

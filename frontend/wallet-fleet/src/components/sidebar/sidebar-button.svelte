@@ -25,6 +25,6 @@
   }
 
   .selected {
-    border-color: orangered;
+    border-color: var(--accent);
   }
 </style>
