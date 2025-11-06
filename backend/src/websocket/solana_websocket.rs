@@ -34,7 +34,8 @@ struct RpcResponseParams {
 }
 
 pub struct SolanaWebsocket {
-    ws_write: Arc<Mutex<WsWrite>>,
+    address: String,
+    ws_write: Arc<Mutex<Option<WsWrite>>>,
     subs_to_id: Arc<Mutex<HashMap<u64, String>>>,
     subscriptions_results: Arc<Mutex<HashMap<String, String>>>,
     subscriptions: Arc<Mutex<HashMap<String, Arc<Notify>>>>,
@@ -42,7 +43,24 @@ pub struct SolanaWebsocket {
 
 impl SolanaWebsocket {
     pub async fn new(address: &str) -> Self {
-        let request = address.into_client_request().unwrap();
+        let mut ws = SolanaWebsocket {
+            address: address.to_owned(),
+            ws_write: Arc::new(Mutex::new(None)),
+            subs_to_id: Arc::new(Mutex::new(HashMap::new())),
+            subscriptions_results: Arc::new(Mutex::new(HashMap::new())),
+            subscriptions: Arc::new(Mutex::new(HashMap::new())),
+        };
+
+        let writer = ws.connect().await;
+        let writer_arc = Arc::clone(&ws.ws_write);
+        let writer_ptr = &mut *writer_arc.lock().await;
+        *writer_ptr = Some(writer);
+
+        ws
+    }
+
+    async fn connect(&mut self) -> WsWrite {
+        let request = self.address.clone().into_client_request().unwrap();
         let conn_result = connect_async(request).await;
         let (stream, res) = match conn_result {
             Err(err) => {
@@ -57,26 +75,30 @@ impl SolanaWebsocket {
 
         let (write, read) = stream.split();
 
-        let ws = SolanaWebsocket {
-            ws_write: Arc::new(Mutex::new(write)),
-            subs_to_id: Arc::new(Mutex::new(HashMap::new())),
-            subscriptions: Arc::new(Mutex::new(HashMap::new())),
-            subscriptions_results: Arc::new(Mutex::new(HashMap::new())),
-        };
+        let subs_to_id_arc = self.subs_to_id.clone();
+        subs_to_id_arc.lock().await.clear();
+        let subscriptions_results_arc = self.subscriptions_results.clone();
+        subscriptions_results_arc.lock().await.clear();
+        let subscriptions_arc = self.subscriptions.clone();
+        subscriptions_arc.lock().await.clear();
 
-        ws.spawn_reader(read);
-        ws
+        self.spawn_reader(read);
+
+        write
     }
 
     fn spawn_reader(&self, ws_read: WsRead) {
         let subs_to_id = Arc::clone(&self.subs_to_id);
         let subscriptions = Arc::clone(&self.subscriptions);
+        let ws_write = Arc::clone(&self.ws_write);
         tokio::spawn(async move {
-            println!("Reading");
             ws_read
                 .for_each(|received| async {
                     let message = match received {
                         Err(err) => {
+                            if matches!(err, tungstenite::Error::ConnectionClosed) {
+                                eprintln!("Connection closed")
+                            }
                             eprintln!("Error receiving websocket data: {err}");
                             return;
                         }
@@ -103,10 +125,13 @@ impl SolanaWebsocket {
                     }
                 })
                 .await;
+
+            let mut ws_write_locked = ws_write.lock().await;
+            *ws_write_locked = None;
         });
     }
 
-    pub async fn confirm_transaction(&self, signature: &str) {
+    pub async fn confirm_transaction(&mut self, signature: &str) {
         let id = &signature[..12];
         let message_data = json!({
             "jsonrpc": "2.0",
@@ -123,7 +148,17 @@ impl SolanaWebsocket {
         let message = Message::text(data_str);
         {
             let writer_arc = Arc::clone(&self.ws_write);
-            let mut writer = writer_arc.lock().await;
+            let writer = &mut *writer_arc.lock().await;
+            if matches!(writer, None) {
+                *writer = Some(self.connect().await);
+                if matches!(writer, None) {
+                    eprintln!(
+                        "Failed to confirm transaction, no websocket writer after reconnecting."
+                    );
+                    return;
+                }
+            }
+            let writer = writer.as_mut().unwrap();
             let send_result = writer.send(message).await;
 
             if let Err(err) = send_result {
@@ -142,16 +177,5 @@ impl SolanaWebsocket {
         notify.notified().await;
         let mut subscriptions = self.subscriptions.lock().await;
         subscriptions.remove(id);
-    }
-
-    pub async fn send_and_wait(&self, message: &str) -> String {
-        let message = Message::text(message);
-        let writer_arc = Arc::clone(&self.ws_write);
-        let mut writer = writer_arc.lock().await;
-        let send_result = writer.send(message).await;
-        if let Err(err) = send_result {
-            eprintln!("Error sending: {err}");
-        }
-        return "result".to_owned();
     }
 }

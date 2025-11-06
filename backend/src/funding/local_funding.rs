@@ -118,7 +118,7 @@ impl Funding for LocalFunding {
                 println!("Built txn {}", sig);
 
                 let confirmation_handle = tokio::spawn(async move {
-                    let websocket = websocket_service_arc.read().await;
+                    let mut websocket = websocket_service_arc.write().await;
                     websocket.confirm_transaction(&txn.signature).await;
                 });
 
