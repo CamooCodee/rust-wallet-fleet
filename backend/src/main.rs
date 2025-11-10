@@ -54,7 +54,8 @@ async fn main() {
 
     let ws = SolanaWebsocket::new(&websocket_url).await;
 
-    let bytes = "testtesttesttesttesttest"
+    let bytes = env::var("MNEMONIC")
+        .expect("No mnemonic provided")
         .bytes()
         .map(|b| b as u8)
         .collect();
