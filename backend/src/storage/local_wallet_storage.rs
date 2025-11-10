@@ -14,8 +14,10 @@ impl LocalWalletStorage {
 }
 
 impl WalletStorage for LocalWalletStorage {
-    fn store_new_wallet(&mut self, wallet: Keypair) {
-        self.wallets.push(wallet);
+    fn create_new_wallet(&mut self) -> Keypair {
+        let new_wallet = Keypair::new();
+        self.wallets.push(new_wallet.insecure_clone());
+        new_wallet
     }
     fn get_all_wallets(&self, _page: u16, _page_size: u16) -> Vec<Keypair> {
         let mut all_wallets: Vec<Keypair> = Vec::new();

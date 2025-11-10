@@ -7,7 +7,7 @@ use axum::{
 };
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
-use solana_sdk::{signature::Keypair, signer::Signer};
+use solana_sdk::signer::Signer;
 
 use crate::{AppState, endpoints::misc::ErrorResponse, rpc::read::get_multiple_accounts};
 
@@ -31,9 +31,8 @@ pub async fn create_wallets(
     let mut pubkeys: Vec<String> = Vec::new();
 
     for _ in 0..payload.count {
-        let new_wallet = Keypair::new();
+        let new_wallet = wallet_store.create_new_wallet();
         pubkeys.push(new_wallet.pubkey().to_string());
-        wallet_store.store_new_wallet(new_wallet);
     }
 
     let res = CreateWalletResponse {

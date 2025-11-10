@@ -54,9 +54,14 @@ async fn main() {
 
     let ws = SolanaWebsocket::new(&websocket_url).await;
 
+    let bytes = "testtesttesttesttesttest"
+        .bytes()
+        .map(|b| b as u8)
+        .collect();
+
     let services = AppServices {
         wallet_store: Arc::new(tokio::sync::RwLock::new(Box::new(
-            storage::local_wallet_storage::LocalWalletStorage::new(),
+            storage::mnemonic_wallet_storage::MnemonicWalletStorage::new(bytes),
         ))),
         funding: Arc::new(tokio::sync::RwLock::new(Box::new(
             funding::local_funding::LocalFunding::new(),
