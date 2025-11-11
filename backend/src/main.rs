@@ -4,14 +4,14 @@ use axum::{
 };
 use dotenvy::dotenv;
 use serde_json::json;
-use std::{env, net::SocketAddr, sync::Arc};
-use tokio::sync::{Mutex, RwLock};
+use std::{env, net::SocketAddr, path::Path, sync::Arc};
+use tokio::sync::RwLock;
 use tower_http::cors::{Any, CorsLayer};
-use tungstenite::Message;
 
-use crate::websocket::solana_websocket::SolanaWebsocket;
+use crate::{config::Config, websocket::solana_websocket::SolanaWebsocket};
 
 mod collecting;
+mod config;
 mod endpoints;
 mod errors;
 mod funding;
@@ -24,16 +24,16 @@ mod websocket;
 pub struct AppState {
     pub services: AppServices,
     pub rpc_url: String,
+    pub config: Arc<RwLock<crate::config::Config>>,
 }
 
 pub type Websocket = Arc<RwLock<Box<SolanaWebsocket>>>;
 
 #[derive(Clone)]
 pub struct AppServices {
-    pub wallet_store: Arc<RwLock<Box<dyn storage::wallet::WalletStorage + Send + Sync>>>,
     pub funding: Arc<RwLock<Box<dyn funding::funding::Funding>>>,
-    pub collecting: Arc<RwLock<Box<dyn collecting::collecting::Collecting>>>,
     pub websocket: Websocket,
+    pub database: Arc<RwLock<tokio_rusqlite::Connection>>,
 }
 
 async fn health() -> Json<serde_json::Value> {
@@ -60,22 +60,25 @@ async fn main() {
         .map(|b| b as u8)
         .collect();
 
+    let db_path = env::var("DATABASE_PATH").expect("no database path in env");
+    let db_path = Path::new(&db_path);
+
     let services = AppServices {
-        wallet_store: Arc::new(tokio::sync::RwLock::new(Box::new(
-            storage::mnemonic_wallet_storage::MnemonicWalletStorage::new(bytes),
-        ))),
         funding: Arc::new(tokio::sync::RwLock::new(Box::new(
             funding::local_funding::LocalFunding::new(),
         ))),
-        collecting: Arc::new(tokio::sync::RwLock::new(Box::new(
-            collecting::default_collecting::DefaultCollecting {},
-        ))),
         websocket: Arc::new(RwLock::new(Box::new(ws))),
+        database: Arc::new(RwLock::new(
+            tokio_rusqlite::Connection::open(db_path)
+                .await
+                .expect("failed to connect to db"),
+        )),
     };
 
     let state = AppState {
         services,
         rpc_url: rpc_url,
+        config: Arc::new(RwLock::new(Config { wallet_seed: bytes })),
     };
 
     let cors = CorsLayer::new()

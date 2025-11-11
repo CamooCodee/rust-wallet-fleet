@@ -11,8 +11,10 @@ use solana_sdk::pubkey::Pubkey;
 
 use crate::{
     AppState,
+    collecting::collecting::collect,
     endpoints::responses::{bad_request, confilict, server_error},
     errors::errors::Error,
+    storage::mnemonic_wallet_storage::get_wallets_by_pubkey,
 };
 
 #[derive(Deserialize)]
@@ -31,12 +33,9 @@ pub async fn collect_sol(
     State(state): State<AppState>,
     Json(payload): Json<CollectSolRequest>,
 ) -> Response {
-    let collecting_arc = Arc::clone(&state.services.collecting);
-    let collecting_service = collecting_arc.read().await;
-    let wallet_arc = Arc::clone(&state.services.wallet_store);
-    let wallet_service = wallet_arc.read().await;
-
-    let source_wallets = wallet_service.get_wallets_by_pubkey(&payload.source_pubkeys);
+    let config_arc = Arc::clone(&state.config);
+    let config = config_arc.read().await;
+    let source_wallets = get_wallets_by_pubkey(&*config, &payload.source_pubkeys);
 
     let lamports_parse_result = payload.lamports.parse::<u64>();
     let lamports = match lamports_parse_result {
@@ -54,9 +53,7 @@ pub async fn collect_sol(
         }
     };
 
-    let collect_result = collecting_service
-        .collect(&state.rpc_url, source_wallets, destination, lamports)
-        .await;
+    let collect_result = collect(&state.rpc_url, source_wallets, destination, lamports).await;
 
     if let Err(err) = collect_result {
         eprintln!("Error while collecting sol {}", err);

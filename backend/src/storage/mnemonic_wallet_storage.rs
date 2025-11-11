@@ -1,70 +1,92 @@
+use crate::{config::Config, errors::errors::Error};
 use solana_sdk::{
     signature::{Keypair, keypair_from_seed},
     signer::Signer,
 };
+use tokio_rusqlite::Connection;
 
-use crate::storage::wallet::WalletStorage;
+fn get_wallet(seed: &Vec<u8>, index: u64) -> Keypair {
+    let index_bytes = index.to_be_bytes();
+    let mut seed_with_index = seed.clone();
+    seed_with_index.extend_from_slice(&index_bytes);
+    let keypair_result = keypair_from_seed(&seed_with_index);
 
-pub struct MnemonicWalletStorage {
-    seed: Vec<u8>,
-    index: u64,
+    let keypair = match keypair_result {
+        Ok(k) => k,
+        Err(err) => {
+            panic!("Failed to create keypair from seed {}", err);
+        }
+    };
+
+    return keypair;
 }
 
-impl MnemonicWalletStorage {
-    pub fn new(seed: Vec<u8>) -> Self {
-        Self { seed, index: 0u64 }
-    }
+pub async fn create_new_wallet(database: &Connection, config: &Config) -> Result<Keypair, Error> {
+    let wallet_index = database
+        .call(|conn| {
+            let new_seed = conn.query_row(
+                "
+                INSERT INTO wallets DEFAULT VALUES
+                RETURNING seed;
+                ",
+                [],
+                |row| row.get(0),
+            )?;
 
-    fn get_wallet(seed: &Vec<u8>, index: u64) -> Keypair {
-        let index_bytes = index.to_be_bytes();
-        let mut seed_with_index = seed.clone();
-        seed_with_index.extend_from_slice(&index_bytes);
-        let keypair_result = keypair_from_seed(&seed_with_index);
+            return Ok(new_seed);
+        })
+        .await?;
 
-        let keypair = match keypair_result {
-            Ok(k) => k,
-            Err(err) => {
-                panic!("Failed to create keypair from seed {}", err);
-            }
-        };
+    let keypair = get_wallet(&config.wallet_seed, wallet_index);
 
-        return keypair;
-    }
+    return Ok(keypair);
 }
 
-impl WalletStorage for MnemonicWalletStorage {
-    fn create_new_wallet(&mut self) -> Keypair {
-        let keypair = MnemonicWalletStorage::get_wallet(&self.seed, self.index);
-        self.index += 1;
+pub async fn get_all_wallets(
+    database: &Connection,
+    config: &Config,
+    _page: u16,
+    _page_size: u16,
+) -> Result<Vec<Keypair>, Error> {
+    let all_wallets = database
+        .call(|conn| {
+            let mut stmt = conn.prepare(
+                "
+                SELECT seed
+                FROM wallets;
+                ",
+            )?;
+            let wallet_seeds = stmt
+                .query_map([], |row| Ok(row.get::<usize, u64>(0)?))?
+                .collect::<Result<Vec<u64>, rusqlite::Error>>()?;
 
-        return keypair;
+            return Ok(wallet_seeds);
+        })
+        .await?;
+
+    let mut keypairs: Vec<Keypair> = Vec::new();
+    for i in all_wallets {
+        keypairs.push(get_wallet(&config.wallet_seed, i));
     }
 
-    fn get_all_wallets(&self, _page: u16, _page_size: u16) -> Vec<Keypair> {
-        let mut keypairs: Vec<Keypair> = Vec::new();
-        for i in 0..self.index {
-            keypairs.push(MnemonicWalletStorage::get_wallet(&self.seed, i));
+    return Ok(keypairs);
+}
+
+pub fn get_wallets_by_pubkey(config: &Config, pubkeys: &Vec<String>) -> Vec<Keypair> {
+    let mut keypairs: Vec<Keypair> = Vec::new();
+    let mut pubkeys = pubkeys.clone();
+    let max_checks = 10000;
+    for i in 0..max_checks {
+        let keypair = get_wallet(&config.wallet_seed, i);
+        let found = pubkeys
+            .iter()
+            .position(|p| *p == keypair.pubkey().to_string());
+
+        if let Some(index) = found {
+            keypairs.push(keypair);
+            pubkeys.remove(index);
         }
-
-        return keypairs;
     }
 
-    fn get_wallets_by_pubkey(&self, pubkeys: &Vec<String>) -> Vec<Keypair> {
-        let mut keypairs: Vec<Keypair> = Vec::new();
-        let mut pubkeys = pubkeys.clone();
-        let max_checks = 10000;
-        for i in 0..max_checks {
-            let keypair = MnemonicWalletStorage::get_wallet(&self.seed, i);
-            let found = pubkeys
-                .iter()
-                .position(|p| *p == keypair.pubkey().to_string());
-
-            if let Some(index) = found {
-                keypairs.push(keypair);
-                pubkeys.remove(index);
-            }
-        }
-
-        return keypairs;
-    }
+    return keypairs;
 }

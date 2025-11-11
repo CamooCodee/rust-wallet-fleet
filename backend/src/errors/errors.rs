@@ -13,6 +13,9 @@ pub enum Error {
     InsufficientSol(String),
 
     #[error("{0}")]
+    Database(#[from] tokio_rusqlite::Error),
+
+    #[error("{0}")]
     RpcError(String),
 
     #[error("{0}")]

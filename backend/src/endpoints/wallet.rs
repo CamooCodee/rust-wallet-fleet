@@ -3,13 +3,18 @@ use std::sync::Arc;
 use axum::{
     Json,
     extract::{Query, State},
-    response::IntoResponse,
+    response::{IntoResponse, Response},
 };
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use solana_sdk::signer::Signer;
 
-use crate::{AppState, endpoints::misc::ErrorResponse, rpc::read::get_multiple_accounts};
+use crate::{
+    AppState,
+    endpoints::{misc::ErrorResponse, responses::server_error},
+    rpc::read::get_multiple_accounts,
+    storage::mnemonic_wallet_storage::{create_new_wallet, get_all_wallets},
+};
 
 #[derive(Deserialize)]
 pub struct CreateWalletRequest {
@@ -25,21 +30,31 @@ pub struct CreateWalletResponse {
 pub async fn create_wallets(
     State(state): State<AppState>,
     Json(payload): Json<CreateWalletRequest>,
-) -> Json<CreateWalletResponse> {
-    let wallet_store_arc = Arc::clone(&state.services.wallet_store);
-    let mut wallet_store = wallet_store_arc.write().await;
+) -> Response {
     let mut pubkeys: Vec<String> = Vec::new();
+    let db_arc = Arc::clone(&state.services.database);
+    let db = db_arc.read().await;
+    let config_arc = Arc::clone(&state.config);
+    let config = config_arc.read().await;
 
     for _ in 0..payload.count {
-        let new_wallet = wallet_store.create_new_wallet();
-        pubkeys.push(new_wallet.pubkey().to_string());
+        let new_wallet = create_new_wallet(&*db, &*config).await;
+        match new_wallet {
+            Err(err) => {
+                eprintln!("Error creating new wallet: {}", err);
+                return server_error("Failed to create new wallet.");
+            }
+            Ok(wallet) => {
+                pubkeys.push(wallet.pubkey().to_string());
+            }
+        }
     }
 
     let res = CreateWalletResponse {
         message: format!("Created {} wallets", payload.count),
         pubkeys: pubkeys,
     };
-    return Json(res);
+    return (StatusCode::OK, Json(res)).into_response();
 }
 
 #[derive(Deserialize)]
@@ -74,9 +89,20 @@ pub async fn list_wallets(
     State(state): State<AppState>,
     Query(params): Query<ListWalletsRequest>,
 ) -> impl IntoResponse {
-    let wallet_store_arc = Arc::clone(&state.services.wallet_store);
-    let wallet_store = wallet_store_arc.read().await;
-    let wallets = wallet_store.get_all_wallets(params.page, params.page_size);
+    let db_arc = Arc::clone(&state.services.database);
+    let db = db_arc.read().await;
+    let config_arc = Arc::clone(&state.config);
+    let config = config_arc.read().await;
+
+    let wallets = get_all_wallets(&*db, &*config, params.page, params.page_size).await;
+    let wallets = match wallets {
+        Err(err) => {
+            eprintln!("Error getting wallets: {}", err);
+            return server_error("Internal error.");
+        }
+        Ok(w) => w,
+    };
+
     let pubkeys = wallets.iter().map(|w| w.pubkey().to_string()).collect();
 
     let accounts_result = get_multiple_accounts(&state.rpc_url, "list_wallets", &pubkeys).await;

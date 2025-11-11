@@ -27,3 +27,5 @@ tungstenite = { version = "0.24", features = ["rustls-tls-webpki-roots"] }
 futures-util = { version = "0.3.28", default-features = false, features = [
     "sink",
 ] }
+tokio-rusqlite = { version = "0.6.0" }
+rusqlite = { version = "0.32.1" }

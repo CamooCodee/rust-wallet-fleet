@@ -1,10 +1,23 @@
 use std::sync::Arc;
 
-use axum::{Json, extract::State, http::StatusCode, response::IntoResponse};
+use axum::{
+    Json,
+    extract::State,
+    http::StatusCode,
+    response::{IntoResponse, Response},
+};
 use serde::{Deserialize, Serialize};
 use solana_sdk::{pubkey::Pubkey, signer::Signer};
 
-use crate::{AppState, endpoints::misc::ErrorResponse, errors::errors::Error};
+use crate::{
+    AppState,
+    endpoints::{
+        misc::ErrorResponse,
+        responses::{bad_request, server_error},
+    },
+    errors::errors::Error,
+    storage::mnemonic_wallet_storage::get_all_wallets,
+};
 
 #[derive(Deserialize)]
 pub struct InitiateFundingRequest {
@@ -26,35 +39,35 @@ pub struct InitiateFundingResponse {
 pub async fn initiate_job(
     State(state): State<AppState>,
     Json(payload): Json<InitiateFundingRequest>,
-) -> impl IntoResponse {
-    let wallet_store_arc = Arc::clone(&state.services.wallet_store);
-    let wallet_store = wallet_store_arc.read().await;
-    let wallets = wallet_store.get_all_wallets(1, 9999);
+) -> Response {
+    let db_arc = Arc::clone(&state.services.database);
+    let db = db_arc.read().await;
+    let config_arc = Arc::clone(&state.config);
+    let config = config_arc.read().await;
+
+    let lamports = payload.lamports_per_wallet.parse::<u64>();
+    let lamports_per_wallet = match lamports {
+        Err(_) => {
+            return bad_request("Invalid lamports string format");
+        }
+        Ok(v) => v,
+    };
+
+    let wallets = get_all_wallets(&*db, &*config, 1, 9999).await;
+    let wallets = match wallets {
+        Err(err) => {
+            eprintln!("Error getting wallets for funding: {}", err);
+            return server_error("Internal error");
+        }
+        Ok(w) => w,
+    };
+
     let pubkeys: Vec<Pubkey> = wallets.iter().map(|w| w.pubkey()).collect();
     let wallet_count = pubkeys.len() as u128;
 
     if wallet_count == 0 {
-        return (
-            StatusCode::BAD_REQUEST,
-            Json(ErrorResponse {
-                message: String::from("There are 0 wallets."),
-            }),
-        )
-            .into_response();
+        return bad_request("There are 0 wallets.");
     }
-    let lamports = payload.lamports_per_wallet.parse::<u64>();
-    let lamports_per_wallet = match lamports {
-        Err(_) => {
-            return (
-                StatusCode::BAD_REQUEST,
-                Json(ErrorResponse {
-                    message: String::from("Invalid lamports string format"),
-                }),
-            )
-                .into_response();
-        }
-        Ok(v) => v,
-    };
 
     let funding_arc = Arc::clone(&state.services.funding);
     let mut funding = funding_arc.write().await;
@@ -65,13 +78,7 @@ pub async fn initiate_job(
     let job = match job_result {
         Err(err) => {
             eprintln!("Error initiating funding job {}", err);
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorResponse {
-                    message: String::from("There was an internal error starting the fundin job."),
-                }),
-            )
-                .into_response();
+            return server_error("There was an internal error starting the fundin job.");
         }
         Ok(j) => j,
     };
