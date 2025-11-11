@@ -1,4 +1,5 @@
 use crate::{config::Config, errors::errors::Error};
+use rusqlite::params;
 use solana_sdk::{
     signature::{Keypair, keypair_from_seed},
     signer::Signer,
@@ -38,6 +39,18 @@ pub async fn create_new_wallet(database: &Connection, config: &Config) -> Result
         .await?;
 
     let keypair = get_wallet(&config.wallet_seed, wallet_index);
+    let pubkey = keypair.pubkey().to_string();
+
+    database
+        .call(move |conn| {
+            conn.execute(
+                "UPDATE wallets SET pubkey = ?1 WHERE seed = ?2",
+                params![pubkey, wallet_index],
+            )?;
+
+            return Ok(());
+        })
+        .await?;
 
     return Ok(keypair);
 }
@@ -72,21 +85,40 @@ pub async fn get_all_wallets(
     return Ok(keypairs);
 }
 
-pub fn get_wallets_by_pubkey(config: &Config, pubkeys: &Vec<String>) -> Vec<Keypair> {
-    let mut keypairs: Vec<Keypair> = Vec::new();
-    let mut pubkeys = pubkeys.clone();
-    let max_checks = 10000;
-    for i in 0..max_checks {
-        let keypair = get_wallet(&config.wallet_seed, i);
-        let found = pubkeys
-            .iter()
-            .position(|p| *p == keypair.pubkey().to_string());
+pub async fn get_wallets_by_pubkey(
+    database: &Connection,
+    config: &Config,
+    pubkeys: &Vec<String>,
+) -> Result<Vec<Keypair>, Error> {
+    let pubkeys_statement = pubkeys
+        .iter()
+        .map(|p| format!("'{}'", p))
+        .collect::<Vec<String>>()
+        .join(", ");
 
-        if let Some(index) = found {
-            keypairs.push(keypair);
-            pubkeys.remove(index);
-        }
+    let sql = format!(
+        "SELECT seed FROM wallets WHERE pubkey IN ({});",
+        pubkeys_statement
+    );
+
+    println!("Constructed sql to get_wallets_by_pubkey: {}", sql);
+
+    let wallet_seeds = database
+        .call(move |conn| {
+            let mut stmt = conn.prepare(&sql)?;
+            let wallet_seeds = stmt
+                .query_map([], |row| Ok(row.get::<usize, u64>(0)?))?
+                .collect::<Result<Vec<u64>, rusqlite::Error>>()?;
+
+            return Ok(wallet_seeds);
+        })
+        .await?;
+
+    let mut keypairs: Vec<Keypair> = Vec::new();
+    for i in wallet_seeds {
+        let keypair = get_wallet(&config.wallet_seed, i);
+        keypairs.push(keypair);
     }
 
-    return keypairs;
+    return Ok(keypairs);
 }

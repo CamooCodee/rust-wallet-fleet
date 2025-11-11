@@ -35,7 +35,17 @@ pub async fn collect_sol(
 ) -> Response {
     let config_arc = Arc::clone(&state.config);
     let config = config_arc.read().await;
-    let source_wallets = get_wallets_by_pubkey(&*config, &payload.source_pubkeys);
+    let db_arc = Arc::clone(&state.services.database);
+    let db = db_arc.read().await;
+
+    let source_wallets = get_wallets_by_pubkey(&*db, &*config, &payload.source_pubkeys).await;
+    let source_wallets = match source_wallets {
+        Err(err) => {
+            eprintln!("Error getting wallets to collect: {}", err);
+            return server_error("Internal error.");
+        }
+        Ok(w) => w,
+    };
 
     let lamports_parse_result = payload.lamports.parse::<u64>();
     let lamports = match lamports_parse_result {

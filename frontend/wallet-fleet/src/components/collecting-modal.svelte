@@ -12,6 +12,7 @@
       pubkeys: string[],
       destination: string
     ) => void;
+    isLoading: boolean;
   }
 
   let props: CollectingModalProps = $props();
@@ -109,7 +110,7 @@
     <div class="button-layout">
       <button
         class="action-button"
-        disabled={notEnoughSol || !validCollectAmount}
+        disabled={notEnoughSol || !validCollectAmount || props.isLoading}
         onclick={() => {
           props.onCollect(
             solToCollect,

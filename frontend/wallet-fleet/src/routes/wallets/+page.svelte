@@ -80,12 +80,14 @@
   }
 
   let collectModalOpen = $state(false);
+  let loadingCollecting = $state(false);
 
   async function collectSol(
     solToCollect: number,
     pubkeys: string[],
     destination: string
   ) {
+    loadingCollecting = true;
     const lamports = (solToCollect * 1_000_000_000).toString();
     const body = {
       lamports: lamports,
@@ -95,6 +97,8 @@
     const response = await postApi("/collect", body);
     const data = await response.json();
     toastRes(response, data);
+
+    loadingCollecting = false;
 
     if (response.status > 300) {
       return;
@@ -175,6 +179,7 @@
       onCollect={(solToCollect, pubkeys, destination) => {
         collectSol(solToCollect, pubkeys, destination);
       }}
+      isLoading={loadingCollecting}
     />
   </div>
 {/if}

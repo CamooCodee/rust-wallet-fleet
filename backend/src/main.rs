@@ -54,12 +54,6 @@ async fn main() {
 
     let ws = SolanaWebsocket::new(&websocket_url).await;
 
-    let bytes = env::var("MNEMONIC")
-        .expect("No mnemonic provided")
-        .bytes()
-        .map(|b| b as u8)
-        .collect();
-
     let db_path = env::var("DATABASE_PATH").expect("no database path in env");
     let db_path = Path::new(&db_path);
 
@@ -74,6 +68,15 @@ async fn main() {
                 .expect("failed to connect to db"),
         )),
     };
+
+    let mut bytes: Vec<u8> = env::var("MNEMONIC")
+        .expect("No mnemonic provided")
+        .bytes()
+        .map(|b| b as u8)
+        .collect();
+    if bytes.len() > 24 {
+        bytes.drain(24..bytes.len());
+    }
 
     let state = AppState {
         services,
