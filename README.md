@@ -9,7 +9,7 @@
 
 ## .env
 
-`MNEMONI` must be a 24 byte seed to generate the wallets. Any additional bytes will be ignored
+`MNEMONIC` must be a 24 byte seed to generate the wallets. Any additional bytes will be ignored
 
 ## Showcase
 

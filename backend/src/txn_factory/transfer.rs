@@ -1,4 +1,7 @@
-use crate::{errors::errors::Error, txn_factory::util};
+use crate::{
+    errors::errors::Error,
+    txn_factory::util::{self, encode_transaction},
+};
 use solana_sdk::{
     hash::Hash, pubkey::Pubkey, signature::Keypair, signer::Signer, transaction::Transaction,
 };
@@ -16,8 +19,7 @@ pub async fn build_sol_transfer(
     transaction.sign(&[wallet], blockhash.clone());
     let hash = transaction.signatures[0].to_string();
 
-    let serialized = bincode::serialize(&transaction)?;
-    let encoded = bs58::encode(serialized).into_string();
+    let encoded = encode_transaction(&transaction);
 
     Ok(util::SimpleTransaction {
         transaction: encoded,

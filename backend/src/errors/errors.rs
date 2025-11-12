@@ -1,5 +1,7 @@
-use solana_sdk::hash::ParseHashError;
+use base64::DecodeError;
+use solana_sdk::{hash::ParseHashError, signer::SignerError};
 use thiserror::Error;
+use tokio::task::JoinError;
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -29,4 +31,13 @@ pub enum Error {
 
     #[error("{0}")]
     Bincode(#[from] bincode::Error),
+
+    #[error("{0}")]
+    Decoding(#[from] DecodeError),
+
+    #[error("{0}")]
+    JoinError(#[from] JoinError),
+
+    #[error("{0}")]
+    SignerError(#[from] SignerError),
 }

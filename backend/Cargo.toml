@@ -29,3 +29,4 @@ futures-util = { version = "0.3.28", default-features = false, features = [
 ] }
 tokio-rusqlite = { version = "0.6.0" }
 rusqlite = { version = "0.32.1" }
+base64 = "0.22.1"

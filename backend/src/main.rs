@@ -8,7 +8,9 @@ use std::{env, net::SocketAddr, path::Path, sync::Arc};
 use tokio::sync::RwLock;
 use tower_http::cors::{Any, CorsLayer};
 
-use crate::{config::Config, websocket::solana_websocket::SolanaWebsocket};
+use crate::{
+    config::Config, txn_factory::swaps::swap_jupiter, websocket::solana_websocket::SolanaWebsocket,
+};
 
 mod collecting;
 mod config;
@@ -49,8 +51,8 @@ async fn main() {
     let helius_api_key =
         env::var("HELIUS_API_KEY").expect("Missing HELIUS_API_KEY in environment or .env file");
 
-    let rpc_url = format!("https://devnet.helius-rpc.com/?api-key={}", helius_api_key);
-    let websocket_url = format!("wss://devnet.helius-rpc.com/?api-key={}", helius_api_key);
+    let rpc_url = format!("https://mainnet.helius-rpc.com/?api-key={}", helius_api_key);
+    let websocket_url = format!("wss://mainnet.helius-rpc.com/?api-key={}", helius_api_key);
 
     let ws = SolanaWebsocket::new(&websocket_url).await;
 
